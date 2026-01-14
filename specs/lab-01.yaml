@@ -1,0 +1,15 @@
+id: lab-01-test
+repo_name: "Hello-World" # Используем репозиторий, который точно существует
+checks:
+  - id: readme_exists
+    type: file_exists
+    params: { path: "README.md" }
+    description: "Проверка наличия README.md"
+  - id: prs_exist
+    type: pr_merged_count
+    params: { min_count: 1 }
+    description: "Должен быть как минимум 1 влитый Pull Request"
+  - id: conventional_commits
+    type: commit_message_regex
+    params: { pattern: '^(Merge|Initial)' } # Упростим regex для тестового репозитория
+    description: "Коммиты должны соответствовать стилю"

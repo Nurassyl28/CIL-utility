@@ -1,0 +1,4 @@
+{"student_alias": "Nurassyl28", "score": "66.67%", "passed_checks": 2, "failed_checks": 1, "errored_checks": 0, "total_checks": 3, "llm_analysis": {"verdict": "\u0430\u043d\u0430\u043b\u0438\u0437_\u043f\u0440\u043e\u0432\u0430\u043b\u0435\u043d", "reasons": ["\u041f\u0440\u043e\u0438\u0437\u043e\u0448\u043b\u0430 \u043e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u0430\u043d\u0430\u043b\u0438\u0437\u0435: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"], "quotes": []}}
+{"id": "readme_exists", "status": "PASS", "details": ""}
+{"id": "prs_exist", "status": "PASS", "details": ""}
+{"id": "conventional_commits", "status": "FAIL", "details": ""}

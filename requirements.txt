@@ -1,0 +1,9 @@
+# Убираем typer, так как перешли к интерактивному вводу
+# pydantic остается для валидации YAML
+# requests остается для API
+# pyyaml остается для чтения YAML
+typer
+pydantic
+requests
+pyyaml
+google-genai
