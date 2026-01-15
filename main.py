@@ -31,7 +31,7 @@ def run(
 
     # --- Интерактивный ввод ---
     try:
-        student_alias = input("Введите GitHub alias студента (например, octocat): ").strip()
+        student_alias = input("Введите GitHub alias студента (например, Nurassyl28): ").strip()
         repo_name = input(f"Введите имя репозитория (например, lab-01-market-product-and-git): ").strip()
 
         if not spec_path.exists():
@@ -61,12 +61,21 @@ def run(
 
         # 1. Проверяем доступность репозитория
         repo_info = client.get_repo_info()
-        if not repo_info or repo_info.get('private'):
-            status = "ПРИВАТНЫЙ" if (repo_info and repo_info.get('private')) else "НЕ НАЙДЕН"
-            print(f"  ❌ Репозиторий {status}. Проверка остановлена.")
+        if not repo_info:
+            print(f"  ❌ Не удалось получить информацию о репозитории. Возможные причины:")
+            print(f"     - Репозиторий не существует")
+            print(f"     - Неверный GitHub токен (ошибка 401)")
+            print(f"     - Репозиторий приватный и токен не имеет доступа")
             # Создаем отчет о провале
             reporter = Reporter(student_alias=student_alias, results=[])
-            reporter.write_failure_report(student_results_dir, f"Репозиторий не найден или является приватным ({status}).")
+            reporter.write_failure_report(student_results_dir, "Не удалось получить информацию о репозитории. Проверьте токен и доступность репозитория.")
+            raise typer.Exit()
+        
+        if repo_info.get('private'):
+            print(f"  ❌ Репозиторий является приватным. Проверка остановлена.")
+            # Создаем отчет о провале
+            reporter = Reporter(student_alias=student_alias, results=[])
+            reporter.write_failure_report(student_results_dir, "Репозиторий является приватным.")
             raise typer.Exit()
 
         # 2. Скачиваем архив
@@ -115,8 +124,23 @@ def run(
 
     except KeyboardInterrupt:
         print("\n\nПрограмма прервана пользователем.")
+    except typer.Exit:
+        # Это нормальный выход, не обрабатываем
+        raise
     except Exception as e:
-        print(f"\n❌ Произошла непредвиденная ошибка: {e}")
+        # Безопасно обрабатываем ошибку с Unicode
+        try:
+            error_msg = str(e) if str(e) else repr(e)
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            error_msg = repr(e) if repr(e) else "Unknown error"
+        
+        if error_msg:
+            try:
+                print(f"\n❌ Произошла непредвиденная ошибка: {error_msg}")
+            except UnicodeEncodeError:
+                print(f"\n[ERROR] Unexpected error: {error_msg}")
+        else:
+            print(f"\n❌ Произошла непредвиденная ошибка (тип: {type(e).__name__})")
         raise typer.Exit(code=1)
 
 if __name__ == "__main__":

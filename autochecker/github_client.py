@@ -2,8 +2,14 @@
 import requests
 import json
 import hashlib
+import sys
+import io
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+
+# Убеждаемся, что стандартный вывод использует UTF-8
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 CACHE_DIR = Path(".autochecker_cache")
 CACHE_DIR.mkdir(exist_ok=True)
@@ -53,20 +59,51 @@ class GitHubClient:
                 return cached_data
         
         try:
-            response = requests.get(full_endpoint_url, headers=self._headers)
+            # Убеждаемся, что заголовки правильно закодированы
+            safe_headers = {}
+            for key, value in self._headers.items():
+                if isinstance(value, str):
+                    # Убеждаемся, что значение - это ASCII или правильно закодированная строка
+                    try:
+                        value.encode('ascii')
+                        safe_headers[key] = value
+                    except UnicodeEncodeError:
+                        # Если есть не-ASCII символы, пробуем закодировать в UTF-8 и декодировать обратно
+                        safe_headers[key] = value.encode('utf-8').decode('latin-1', errors='replace')
+                else:
+                    safe_headers[key] = value
+            
+            response = requests.get(full_endpoint_url, headers=safe_headers)
             response.raise_for_status()
             data = response.json()
             if use_cache:
                 self._set_cache(full_endpoint_url, data)
             return data
         except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                print(f"  ❌ Ресурс не найден: {full_endpoint_url}")
+            status_code = e.response.status_code if e.response else 0
+            if status_code == 404:
+                try:
+                    print(f"  ❌ Ресурс не найден: {full_endpoint_url}")
+                except UnicodeEncodeError:
+                    print(f"  [ERROR] Resource not found: {full_endpoint_url}")
                 return None
-            print(f"  ❌ HTTP ошибка при запросе к {full_endpoint_url}: {e}")
+            elif status_code == 401:
+                try:
+                    print(f"  ❌ Ошибка авторизации (401). Проверьте правильность GitHub токена.")
+                except UnicodeEncodeError:
+                    print(f"  [ERROR] Authorization failed (401). Check your GitHub token.")
+                return None
+            else:
+                try:
+                    print(f"  ❌ HTTP ошибка {status_code} при запросе к {full_endpoint_url}: {e}")
+                except UnicodeEncodeError:
+                    print(f"  [ERROR] HTTP error {status_code}: {e}")
             return None
         except requests.exceptions.RequestException as e:
-            print(f"  ❌ Ошибка сети при запросе к {full_endpoint_url}: {e}")
+            try:
+                print(f"  ❌ Ошибка сети при запросе к {full_endpoint_url}: {e}")
+            except UnicodeEncodeError:
+                print(f"  [ERROR] Network error: {e}")
             return None
 
     def get_repo_info(self) -> Optional[Dict[str, Any]]:
