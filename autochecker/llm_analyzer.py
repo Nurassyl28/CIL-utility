@@ -6,7 +6,7 @@ from .repo_reader import RepoReader
 from .github_client import GitHubClient
 
 
-def analyze_repo(gemini_api_key: str, reader: RepoReader, client: GitHubClient) -> Dict:
+def analyze_repo(gemini_api_key: str, reader: RepoReader, client: GitHubClient, lab_spec=None, repo_owner=None) -> Dict:
     """
     Анализ репозитория с помощью Gemini через REST API.
     Используем прямые HTTP-запросы вместо библиотеки для избежания проблем с кодировкой.
@@ -28,9 +28,26 @@ def analyze_repo(gemini_api_key: str, reader: RepoReader, client: GitHubClient) 
 
     repo_info = client.get_repo_info()
     default_branch = repo_info.get('default_branch', 'main') if repo_info else 'main'
-
+    repo_url = repo_info.get('html_url', '') if repo_info else ''
+    
+    # Получаем последний коммит для генерации ссылок
     commits = client.get_commits(branch=default_branch)
+    commit_sha = commits[0]['sha'] if commits else 'main'
     commit_messages = "\n".join([c['commit']['message'] for c in commits[:20]]) if commits else "No commits found."
+    
+    # Формируем список задач из спецификации
+    lab_tasks_description = ""
+    if lab_spec and hasattr(lab_spec, 'checks'):
+        tasks = []
+        for i, check in enumerate(lab_spec.checks, 1):
+            task_desc = f"Task {i}: {check.description or check.id}"
+            if check.params:
+                params_str = ", ".join([f"{k}={v}" for k, v in check.params.items()])
+                task_desc += f" (Параметры: {params_str})"
+            tasks.append(task_desc)
+        lab_tasks_description = "\n".join(tasks) if tasks else "Задачи не указаны"
+    else:
+        lab_tasks_description = "Задачи не указаны в спецификации"
     
     # Безопасно обрабатываем сообщения коммитов
     if commit_messages and isinstance(commit_messages, bytes):
@@ -55,32 +72,65 @@ def analyze_repo(gemini_api_key: str, reader: RepoReader, client: GitHubClient) 
 ---
 """
 
-    # 2. Формулируем промпт (используем английский для избежания проблем с кодировкой)
-    # Но ответ может быть на русском
-    prompt = f"""You are an experienced programming instructor reviewing a student's project.
-Analyze the following information about the student's work:
+    # 2. Формулируем улучшенный промпт на основе системного промпта
+    repo_name = lab_spec.repo_name if lab_spec else "unknown"
+    owner = repo_owner or "unknown"
+    
+    prompt = f"""Ты — строгий и технический AI-ассистент для проверки студенческих лабораторных работ.
+Твоя задача — проанализировать работу студента и сгенерировать детальный отчет.
+
+### ВХОДНЫЕ ДАННЫЕ:
+1. Репозиторий: {repo_url or f'https://github.com/{owner}/{repo_name}'}
+2. Commit SHA (для ссылок): {commit_sha}
+3. Список задач (Tasks):
+{lab_tasks_description}
+
+### ИНФОРМАЦИЯ О РАБОТЕ:
 {repo_content}
 
-Your task is to provide constructive feedback.
-The response must be in JSON format with the following keys:
-- "verdict": Brief summary. One of: "excellent", "good", "satisfactory", "weak", "fail".
-- "reasons": List of strings explaining the assessment. What was good, what was missing?
-- "quotes": List of 2-3 illustrative quotes from the provided materials (README or commits) that support your conclusions.
+### ИНСТРУКЦИЯ ПО ФОРМАТУ (Строго соблюдай!):
 
-Example response:
+#### 1. СТРУКТУРА ОТЧЕТА
+Для каждой задачи из списка задач создай отдельную секцию в формате:
+
+### Task [N]: [Название задачи]
+- **Результат:** [Используй эмодзи: ✅ Выполнено / ⚠️ С замечаниями / ❌ Не выполнено]
+- **Аргументация:** [Краткое техническое объяснение, почему поставлена такая оценка. Укажи, что работает, а что нет.]
+- **Цитаты и Код:** [Приведи фрагмент кода или цитату из коммитов, если есть.]
+- **Ссылка:** [Если возможно, вставь прямую ссылку на файл или код в формате: https://github.com/{owner}/{repo_name}/blob/{commit_sha}/[путь]#L[строка]]
+
+#### 2. ОБЩИЙ ВЕРДИКТ
+В конце отчета укажи общую оценку работы.
+
+### ОБЩАЯ ОЦЕНКА
+- **Вердикт:** [excellent / good / satisfactory / weak / fail]
+- **Обоснование:** [Краткое резюме всей работы]
+
+### ВАЖНО:
+- Пиши на русском языке
+- Будь объективен и краток
+- Используй техническую терминологию
+- Если задача не выполнена, четко объясни почему
+- Если есть проблемы, предложи конкретные улучшения
+
+Ответ должен быть в формате JSON со следующими ключами:
 {{
-  "verdict": "good",
-  "reasons": [
-    "Good README file structure.",
-    "Not all commits follow the accepted style."
-  ],
-  "quotes": [
-    "feat: add user authentication",
-    "Initial commit"
+  "verdict": "excellent|good|satisfactory|weak|fail",
+  "reasons": ["список строк с аргументацией"],
+  "quotes": ["2-3 цитаты из коммитов или README"],
+  "task_analysis": [
+    {{
+      "task_number": 1,
+      "task_name": "название задачи",
+      "result": "✅ Выполнено|⚠️ С замечаниями|❌ Не выполнено",
+      "argumentation": "объяснение",
+      "quotes": "цитаты",
+      "link": "ссылка на код (если применимо)"
+    }}
   ]
 }}
 
-Please provide your analysis in JSON format. You can write reasons in Russian if needed.
+Начинай анализ прямо сейчас.
 """
 
     # 3. Вызываем модель через REST API напрямую
@@ -193,7 +243,7 @@ Please provide your analysis in JSON format. You can write reasons in Russian if
                         error_msg = f"{error_msg}: {error_details}"
                         # Выводим детали ошибки для диагностики
                         if req_error.response.status_code == 404:
-                            print(f"⚠️  Модель {model_name} (API {api_version}) не найдена. Детали: {error_details}")
+                            print(f"⚠️  Модель {model_name} не найдена. Детали: {error_details}")
                     except:
                         error_text = req_error.response.text[:300]
                         error_msg = f"{error_msg}: {error_text}"

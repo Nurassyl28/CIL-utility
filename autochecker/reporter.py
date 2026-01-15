@@ -56,13 +56,28 @@ class Reporter:
         if self._llm_analysis:
             html += "<h2>🤖 Анализ от нейросети</h2>"
             html += f"<p><b>Вердикт:</b> {self._llm_analysis.get('verdict', 'нет данных')}</p>"
+            
+            # Показываем анализ по задачам, если есть
+            if self._llm_analysis.get('task_analysis'):
+                html += "<h3>Детальный анализ по задачам:</h3>"
+                for task in self._llm_analysis['task_analysis']:
+                    html += f"<div style='margin-bottom: 20px; border-left: 3px solid #ccc; padding-left: 10px;'>"
+                    html += f"<h4>Task {task.get('task_number', '?')}: {task.get('task_name', 'Неизвестная задача')}</h4>"
+                    html += f"<p><b>Результат:</b> {task.get('result', 'Не указан')}</p>"
+                    html += f"<p><b>Аргументация:</b> {task.get('argumentation', 'Нет аргументации')}</p>"
+                    if task.get('quotes'):
+                        html += f"<p><b>Цитаты:</b> {task.get('quotes')}</p>"
+                    if task.get('link'):
+                        html += f"<p><b>Ссылка:</b> <a href='{task.get('link')}' target='_blank'>{task.get('link')}</a></p>"
+                    html += "</div>"
+            
             if self._llm_analysis.get('reasons'):
-                html += "<b>Аргументация:</b><ul>"
+                html += "<h3>Общая аргументация:</h3><ul>"
                 for reason in self._llm_analysis['reasons']:
                     html += f"<li>{reason}</li>"
                 html += "</ul>"
             if self._llm_analysis.get('quotes'):
-                html += "<b>Цитаты из работы:</b><blockquote>"
+                html += "<h3>Цитаты из работы:</h3><blockquote>"
                 for quote in self._llm_analysis['quotes']:
                     html += f"<p><i>\"{quote}\"</i></p>"
                 html += "</blockquote>"

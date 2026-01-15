@@ -67,7 +67,7 @@ class CheckEngine:
         count = sum(1 for pr in prs if pr.get('merged_at'))
         return count >= min_count
 
-    def run_check(self, check_id: str, check_type: str, params: Dict[str, Any]) -> CheckResult:
+    def run_check(self, check_id: str, check_type: str, params: Dict[str, Any], description: str = "") -> CheckResult:
         """Запускает одну проверку по ее типу."""
         status = "FAIL"
         details = ""
@@ -90,4 +90,4 @@ class CheckEngine:
             status = "ERROR"
             details = f"Ошибка при выполнении проверки '{check_id}': {e}"
         
-        return CheckResult(id=check_id, status=status, details=details)
+        return CheckResult(id=check_id, status=status, details=details, description=description)

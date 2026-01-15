@@ -88,7 +88,7 @@ def run(
         results = []
         for check_spec in lab_spec.checks:
             print(f"  ▶️  Запуск проверки: {check_spec.description or check_spec.id}")
-            result = engine.run_check(check_spec.id, check_spec.type, check_spec.params)
+            result = engine.run_check(check_spec.id, check_spec.type, check_spec.params, check_spec.description)
             results.append(result)
 
         # 4. Анализ с помощью LLM
@@ -97,7 +97,7 @@ def run(
             try:
                 from autochecker.llm_analyzer import analyze_repo
                 print("🤖 Запуск анализа с помощью LLM...")
-                llm_analysis = analyze_repo(gemini_api_key, reader, client)
+                llm_analysis = analyze_repo(gemini_api_key, reader, client, lab_spec=lab_spec, repo_owner=student_alias)
             except ImportError:
                 print("🚨 Не найдены зависимости для LLM-анализа.")
                 print("   Пожалуйста, установите их: pip install -r requirements.txt")
@@ -142,6 +142,45 @@ def run(
         else:
             print(f"\n❌ Произошла непредвиденная ошибка (тип: {type(e).__name__})")
         raise typer.Exit(code=1)
+
+@app.command()
+def batch(
+    students_file: Path = typer.Option(..., "--students", help="Путь к файлу со списком студентов (CSV, JSON или txt)"),
+    repo_name: str = typer.Option(..., "--repo", help="Имя репозитория для всех студентов"),
+    spec_path: Path = typer.Option("specs/lab-01.yaml", "--spec", help="Путь к файлу спецификации .yaml"),
+    output_dir: str = typer.Option("results", "--output", help="Папка для сохранения результатов"),
+    token: str = typer.Option(..., envvar="GITHUB_TOKEN", help="GitHub Personal Access Token"),
+    gemini_api_key: str = typer.Option(None, envvar="GEMINI_API_KEY", help="Gemini API Key (опционально)"),
+    max_workers: int = typer.Option(10, "--workers", help="Количество параллельных потоков"),
+    check_plagiarism: bool = typer.Option(True, "--plagiarism/--no-plagiarism", help="Включить проверку на плагиат"),
+    plagiarism_threshold: float = typer.Option(0.8, "--plagiarism-threshold", help="Порог схожести для плагиата (0.0-1.0)"),
+):
+    """
+    Массовая проверка студентов из файла.
+    
+    Формат файла students_file:
+    - CSV: первая колонка - student_alias
+    - JSON: массив строк ["student1", "student2", ...]
+    - TXT: по одной строке на студента
+    """
+    try:
+        from autochecker.batch_processor import process_batch
+        
+        process_batch(
+            students_file=str(students_file),
+            repo_name=repo_name,
+            spec_path=str(spec_path),
+            token=token,
+            gemini_api_key=gemini_api_key,
+            output_dir=output_dir,
+            max_workers=max_workers,
+            check_plagiarism=check_plagiarism,
+            plagiarism_threshold=plagiarism_threshold
+        )
+    except Exception as e:
+        print(f"\n❌ Ошибка при массовой проверке: {e}")
+        raise typer.Exit(code=1)
+
 
 if __name__ == "__main__":
     app()
