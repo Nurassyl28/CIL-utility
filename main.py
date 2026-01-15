@@ -1,7 +1,10 @@
 # main.py
 import os
 from pathlib import Path
+
 import typer
+from dotenv import load_dotenv
+
 from autochecker.spec import load_spec
 from autochecker.github_client import GitHubClient
 from autochecker.repo_reader import RepoReader
@@ -10,6 +13,9 @@ from autochecker.reporter import Reporter
 
 # Создаем приложение Typer
 app = typer.Typer()
+
+load_dotenv()  # Подхватываем токены из .env, если файл существует
+
 
 @app.command()
 def run(

@@ -65,18 +65,67 @@ def analyze_repo(gemini_api_key: str, reader: RepoReader, client: GitHubClient) 
 
     # 3. Вызываем модель и парсим результат
     try:
-        response = llm_client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt,
-        )
-        cleaned_json = (
-            response.text.strip()
-            .replace("```json", "")
-            .replace("```", "")
-            .strip()
-        )
-        analysis = json.loads(cleaned_json)
-        return analysis
+        # Сначала пробуем получить список доступных моделей
+        try:
+            available_models = list(llm_client.models.list())
+            model_names = [m.name.split('/')[-1] for m in available_models if hasattr(m, 'name')]
+            print(f"📋 Доступные модели: {', '.join(model_names[:5])}...")
+            # Используем первую доступную модель из списка
+            if model_names:
+                candidates = model_names[:3] + [
+                    "gemini-1.5-flash",
+                    "gemini-1.5-pro",
+                    "gemini-1.5-flash-001",
+                    "gemini-1.5-pro-001",
+                ]
+            else:
+                candidates = [
+                    "gemini-1.5-flash",
+                    "gemini-1.5-pro",
+                    "gemini-1.5-flash-001",
+                    "gemini-1.5-pro-001",
+                ]
+        except Exception as list_error:
+            # Если не удалось получить список, используем стандартный набор
+            print(f"⚠️  Не удалось получить список моделей: {list_error}")
+            candidates = [
+                "gemini-1.5-flash",
+                "gemini-1.5-pro",
+                "gemini-1.5-flash-001",
+                "gemini-1.5-pro-001",
+            ]
+        
+        last_error = None
+        for model_name in candidates:
+            try:
+                # Используем правильный формат вызова
+                response = llm_client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                
+                # Получаем текст ответа
+                text = response.text
+                
+                cleaned_json = (
+                    text.strip()
+                    .replace("```json", "")
+                    .replace("```", "")
+                    .strip()
+                )
+                analysis = json.loads(cleaned_json)
+                print(f"✅ Успешно использована модель: {model_name}")
+                return analysis
+            except Exception as model_error:
+                last_error = model_error
+                error_msg = str(model_error)
+                # Пропускаем только ошибки 404, другие ошибки могут быть важными
+                if "404" not in error_msg and "NOT_FOUND" not in error_msg:
+                    print(f"🚨 Критическая ошибка с моделью {model_name}: {error_msg[:150]}")
+                    raise
+                continue
+
+        raise last_error or RuntimeError("LLM call failed")
     except Exception as e:
         print(f"🚨 Ошибка при вызове Gemini API или парсинге JSON: {e}")
         return {
